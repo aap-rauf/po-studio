@@ -69,7 +69,7 @@ function readJson(req, maxBytes = 4096) {
 }
 
 function publicBaseUrl(req) {
-  const configured = process.env.PUBLIC_BASE_URL;
+  const configured = process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL;
   if (configured) return new URL(configured);
   const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
   const forwardedHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
@@ -286,3 +286,4 @@ setInterval(() => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`PO Studio sync service listening on port ${PORT}`);
 });
+
