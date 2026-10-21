@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173b31">
+  <meta name="referrer" content="no-referrer">
+  <title>Scan to PO Studio</title>
+  <style>
+    :root{color-scheme:light;--green:#173b31;--green-dark:#102d25;--mint:#e7f0e9;--line:#dfe6e0;--ink:#28382f;--muted:#78867d;--cream:#f3f6f3}
+    *{box-sizing:border-box}body{margin:0;background:var(--cream);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);min-height:100vh;min-height:100dvh;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+    main{width:min(100%,520px);margin:0 auto;padding:20px 0 28px}.brand{display:flex;align-items:center;gap:10px;margin:2px 2px 18px}.brand-mark{height:40px;width:40px;border-radius:12px;background:#f0c881;color:#234135;display:grid;place-items:center;font-size:12px;font-weight:850}.brand strong{display:block;color:var(--green);font-size:16px}.brand span{font-size:12px;color:var(--muted)}
+    .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 4px 14px #26362d08}.status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;margin:0 0 14px}.status-dot{width:9px;height:9px;border-radius:50%;background:#dfa94b}.status.online .status-dot{background:#48a571}.status.error .status-dot{background:#bd3838}
+    h1{font-size:20px;line-height:1.2;margin:0 0 5px;color:#1f3027}.hint{font-size:13px;color:var(--muted);margin:0 0 18px}.scanner{border:1px solid var(--line);border-radius:12px;background:#0e1f18;overflow:hidden;min-height:55px}.scanner:empty{display:none}.camera-controls{display:flex;gap:8px;margin:10px 0 16px}.btn{min-height:46px;border:1px solid var(--line);border-radius:10px;background:#fff;color:#3f5146;padding:0 14px;font:inherit;font-weight:650;cursor:pointer}.btn.primary{background:var(--green);border-color:var(--green);color:#fff}.btn:disabled{opacity:.55;cursor:wait}.camera-controls .btn{flex:1}
+    form{display:grid;gap:13px}.field{display:grid;gap:6px}.field label{font-size:12px;color:#5f6f65;font-weight:700}.field input{height:50px;border:1px solid #d7e0d9;border-radius:10px;padding:0 13px;font:inherit;font-size:16px;background:#fff;color:var(--ink);width:100%}.field input:focus{outline:0;border-color:#78a28a;box-shadow:0 0 0 3px #e5f0e8}.field-grid{display:grid;grid-template-columns:minmax(0,1fr) 108px;gap:10px}.send{height:52px;width:100%;border:0;border-radius:11px;background:var(--green);color:white;font:inherit;font-weight:750;font-size:16px;cursor:pointer}.send:active{background:var(--green-dark)}.message{min-height:22px;margin:12px 0 0;font-size:13px;color:var(--muted)}.message.good{color:#30704a}.message.bad{color:#b43535}.foot{font-size:11px;color:#8a968e;text-align:center;margin:14px 0 0}
+    @media(max-width:360px){.card{padding:14px}.field-grid{grid-template-columns:minmax(0,1fr) 92px}.btn{padding:0 10px;font-size:14px}}
+  </style>
+  <script src="/vendor/html5-qrcode.min.js"></script>
+</head>
+<body>
+  <main>
+    <header class="brand"><div class="brand-mark">PO</div><div><strong>PO Studio</strong><span>Mobile barcode scanner</span></div></header>
+    <section class="card">
+      <p class="status" id="connectionStatus"><span class="status-dot"></span><span>Connecting to desktop…</span></p>
+      <h1>Scan product</h1>
+      <p class="hint">Scan a product barcode, enter the quantity, then send it to the open desktop purchase order.</p>
+      <div id="cameraReader" class="scanner"></div>
+      <div class="camera-controls"><button class="btn primary" id="cameraButton" type="button">Open camera</button></div>
+      <form id="scanForm">
+        <div class="field-grid">
+          <div class="field"><label for="barcodeInput">Barcode</label><input id="barcodeInput" autocomplete="off" inputmode="text" maxlength="80" placeholder="Scan or type barcode" required></div>
+          <div class="field"><label for="quantityInput">Quantity</label><input id="quantityInput" type="number" inputmode="numeric" min="1" max="100000" step="1" value="1" required></div>
+        </div>
+        <button class="send" id="sendButton" type="submit">Send to desktop</button>
+      </form>
+      <p class="message" id="message" aria-live="polite"></p>
+    </section>
+    <p class="foot">This temporary link sends barcode and quantity scans to your paired PO Studio.</p>
+  </main>
+  <script>
+    (() => {
+      const token = location.pathname.split('/').filter(Boolean)[1] || '';
+      const $ = id => document.getElementById(id);
+      const barcode = $('barcodeInput');
+      const status = $('connectionStatus');
+      const message = $('message');
+      const cameraButton = $('cameraButton');
+      let scanner = null;
+      let cameraOpen = false;
+      let resumeCameraAfterSend = false;
+      let scanLocked = false;
+
+      function setStatus(text, type = '') {
+        status.className = `status ${type}`;
+        status.lastElementChild.textContent = text;
+      }
+
+      async function connect() {
+        if (!/^[a-f0-9]{48}$/.test(token)) throw new Error('Pairing link is invalid. Ask PO Studio for a new QR code.');
+        const response = await fetch(`/api/phone/${token}/connect`, { method: 'POST' });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || 'Could not connect to PO Studio.');
+        setStatus('Connected to desktop PO Studio', 'online');
+      }
+
+      async function stopCamera() {
+        if (!scanner || !cameraOpen) return;
+        cameraOpen = false;
+        cameraButton.textContent = 'Open camera';
+        try { await scanner.stop(); } catch {}
+        try { scanner.clear(); } catch {}
+      }
+
+      async function startCamera() {
+        if (cameraOpen) return;
+        if (!window.Html5Qrcode) {
+          message.textContent = 'Camera scanner could not load. You can type the barcode instead.';
+          message.className = 'message bad';
+          return;
+        }
+        cameraButton.disabled = true;
+        message.textContent = 'Allow camera access when your browser asks.';
+        message.className = 'message';
+        try {
+          scanner = new Html5Qrcode('cameraReader', {
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.CODE_39,
+              Html5QrcodeSupportedFormats.ITF
+            ],
+            verbose: false
+          });
+          await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 280, height: 150 }, aspectRatio: 1.5 }, async value => {
+            if (scanLocked) return;
+            scanLocked = true;
+            barcode.value = value;
+            resumeCameraAfterSend = true;
+            navigator.vibrate?.(60);
+            message.textContent = 'Barcode scanned. Enter the quantity and send it.';
+            message.className = 'message good';
+            await stopCamera();
+            $('quantityInput').focus();
+            scanLocked = false;
+          }, () => {});
+          cameraOpen = true;
+          cameraButton.textContent = 'Close camera';
+          message.textContent = 'Point the rear camera at a product barcode.';
+          message.className = 'message';
+        } catch (error) {
+          scanner = null;
+          message.textContent = error?.message || 'Could not open the camera. Check browser camera permissions.';
+          message.className = 'message bad';
+        } finally {
+          cameraButton.disabled = false;
+        }
+      }
+
+      cameraButton.addEventListener('click', () => cameraOpen ? stopCamera() : startCamera());
+      $('scanForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        const code = barcode.value.trim();
+        const quantity = Number($('quantityInput').value);
+        if (!code || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 100000) {
+          message.textContent = 'Enter a barcode and a whole quantity from 1 to 100000.';
+          message.className = 'message bad';
+          return;
+        }
+        const shouldResume = resumeCameraAfterSend;
+        $('sendButton').disabled = true;
+        message.textContent = 'Sending scan…';
+        message.className = 'message';
+        try {
+          const response = await fetch(`/api/phone/${token}/scans`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ barcode: code, quantity })
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(body.error || 'Scan could not be sent.');
+          message.textContent = `Sent ${code} · quantity ${quantity}`;
+          message.className = 'message good';
+          barcode.value = '';
+          $('quantityInput').value = '1';
+          resumeCameraAfterSend = false;
+          if (shouldResume) await startCamera();
+          else barcode.focus();
+        } catch (error) {
+          message.textContent = error?.message || 'Connection lost. Keep this page open and try again.';
+          message.className = 'message bad';
+        } finally {
+          $('sendButton').disabled = false;
+        }
+      });
+
+      connect().catch(error => setStatus(error.message, 'error'));
+    })();
+  </script>
+</body>
+</html>

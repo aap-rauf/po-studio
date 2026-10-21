@@ -1,0 +1,16 @@
+{
+  "name": "po-studio-phone-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Temporary QR pairing and phone barcode relay for PO Studio",
+  "scripts": {
+    "start": "node sync-server.js"
+  },
+  "dependencies": {
+    "html5-qrcode": "2.3.8",
+    "qrcode": "1.5.6"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
