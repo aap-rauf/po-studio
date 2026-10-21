@@ -2,18 +2,13 @@ services:
   - type: web
     name: po-studio-rauf
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
     envVars:
       - key: APP_PASSWORD
         sync: false
-      - key: PUBLIC_BASE_URL
-        fromService:
-          type: web
-          name: po-studio-rauf
-          envVarKey: RENDER_EXTERNAL_URL
       - key: NODE_ENV
         value: production
 
