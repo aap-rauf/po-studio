@@ -4,7 +4,7 @@ This Node service hosts the desktop PO Studio page and a small phone scanner pag
 
 ## Deploy to Render
 
-The repository includes a Render Blueprint in `render.yaml`. Keep the GitHub repository private, connect it to Render, and create a Blueprint from the repository. The Blueprint starts one always-on Node web service, runs the health check at `/health`, and asks Render to generate the login password. Render supplies the public HTTPS URL; the server uses it to build the phone pairing link automatically. Copy the generated `APP_PASSWORD` from the Render service's Environment page and keep it private.
+The repository includes a Render Blueprint in `render.yaml`. Keep the GitHub repository private, connect it to Render, and create a Blueprint from the repository. The Blueprint starts one always-on Node web service, runs the health check at `/health`, and prompts you to set `APP_PASSWORD` (at least 16 characters). Render supplies the public HTTPS URL; the server uses it to build the phone pairing link automatically.
 
 The Blueprint uses Render's paid `starter` plan so the service does not go to sleep during normal use. Review Render's current price in its dashboard before creating the service. You can select a free plan for a trial, but free services sleep after inactivity and a restart clears active phone pairings.
 
