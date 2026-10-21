@@ -17,7 +17,7 @@ Use Node.js 20 or later. Install dependencies with `npm install`, configure `APP
 
 ## Publish the website
 
-The project includes `render.yaml` for deployment as one HTTPS web service on Render. Keep this GitHub repository private; the generated desktop HTML includes the store and product catalog. Connect the private repository to Render and create a Blueprint from it. Render generates the app password and URL; the service uses Render's URL automatically to create phone-pairing links. The Blueprint selects an always-on paid plan. Review the current price in Render before creating the service.
+The project includes `render.yaml` for deployment as one HTTPS web service on Render. Keep this GitHub repository private; the generated desktop HTML includes the store and product catalog. Connect the private repository to Render and create a Blueprint from it. Render asks you to set an app password during setup and provides the public URL; the service uses that URL automatically to create phone-pairing links. The Blueprint selects an always-on paid plan. Review the current price in Render before creating the service.
 
 The repository should remain private: the generated desktop HTML contains store IDs and the current product catalog. Do not deploy it to a host you do not trust.
 
