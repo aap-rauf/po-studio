@@ -2,11 +2,16 @@
 
 This Node service hosts the desktop PO Studio page and a small phone scanner page. The phone submits only a barcode and quantity; the desktop browser resolves the barcode against its own catalog and adds the item to the currently selected store's open PO. The server keeps pairing tokens and pending scan events in memory and expires them automatically. It does not store the product catalog, store list, or saved drafts.
 
-## Deploy to Render
+## Free hosted setup on Render
 
-The repository includes a Render Blueprint in `render.yaml`. Keep the GitHub repository private, connect it to Render, and create a Blueprint from the repository. The Blueprint starts one always-on Node web service, runs the health check at `/health`, and prompts you to set `APP_PASSWORD` (at least 16 characters). Render supplies the public HTTPS URL; the server uses it to build the phone pairing link automatically.
+The repository includes a Render Blueprint in `render.yaml` configured for Render's Free web service.
 
-The Blueprint uses Render's paid `starter` plan so the service does not go to sleep during normal use. Review Render's current price in its dashboard before creating the service. You can select a free plan for a trial, but free services sleep after inactivity and a restart clears active phone pairings.
+1. Keep the GitHub repository private because the app HTML contains your store and product catalog.
+2. In Render, choose **New → Blueprint**, connect `aap-rauf/po-studio`, and apply the Blueprint from `main`.
+3. When prompted, set `APP_PASSWORD` to a private passphrase of at least 16 characters. Do not add `PUBLIC_BASE_URL`; Render provides its HTTPS URL automatically.
+4. Wait until the service is live, then open its `onrender.com` URL on the desktop and sign in. Select a store, choose **Pair phone**, and scan the QR with your phone.
+
+This costs $0/month while you stay within Render's Free allowances. Render Free web services sleep after 15 minutes without inbound traffic and take about a minute to start when the next request arrives. They can also restart at any time. The pairing session and in-flight scans are held in server memory, so a sleep or restart ends the current phone pairing; create a new QR code and reconnect. The phone's next request after sleep may be delayed while the service starts. Keep the Render dashboard open to monitor usage. Render provides 750 free instance hours per workspace per calendar month. If you do not add a payment method, exceeding included bandwidth or build limits suspends the relevant service/build instead of charging you. These limits make Free suitable for trying the workflow or intermittent, low-volume use, but not business-critical always-on service. Render itself says Free instances are not for production applications.
 
 To deploy on another Node host, set the start command to `npm start`, set `APP_PASSWORD` to a private passphrase of at least 16 characters, and set `PUBLIC_BASE_URL` to the service's public HTTPS origin, for example `https://po-sync.example.com`. The host must support long-lived Server-Sent Events. Both devices connect out to the host, so the desktop does not need router port forwarding. No Google account or spreadsheet is used.
 
@@ -16,5 +21,5 @@ The desktop PO page is password protected because its HTML contains the product 
 
 ## Local development
 
-Run `npm install` and `npm start`, then set `APP_PASSWORD` and (if not running behind Render) `PUBLIC_BASE_URL`. Camera pairing requires a public HTTPS origin. The local HTTP URL is suitable for checking that the desktop page and health route load; it is not sufficient for phone camera pairing.
+Run `npm install`, set `APP_PASSWORD`, and run `npm start`. For hosting outside Render, also set `PUBLIC_BASE_URL`. Camera pairing requires an HTTPS origin. The local HTTP URL is suitable for checking that the desktop page and health route load; it is not sufficient for phone camera pairing.
 
