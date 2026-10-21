@@ -13,11 +13,13 @@ PO Studio is a browser based purchase order tool with a companion phone barcode 
 
 ## Run the sync service
 
-Use Node.js 20 or later. Install dependencies with `npm install`, configure `APP_PASSWORD` and `PUBLIC_BASE_URL` as described in `PHONE-SYNC.md`, then run `npm start`.
+Use Node.js 20 or later. Install dependencies with `npm install`, set `APP_PASSWORD` to a private passphrase of at least 16 characters, then run `npm start`. `PUBLIC_BASE_URL` is only needed when hosting outside Render.
 
 ## Publish the website
 
-The project includes `render.yaml` for deployment as one HTTPS web service on Render. Keep this GitHub repository private; the generated desktop HTML includes the store and product catalog. Connect the private repository to Render and create a Blueprint from it. Render asks you to set an app password during setup and provides the public URL; the service uses that URL automatically to create phone-pairing links. The Blueprint selects an always-on paid plan. Review the current price in Render before creating the service.
+The project includes `render.yaml` for a no-monthly-cost Render Free web service with HTTPS. Keep this GitHub repository private; the generated desktop HTML includes the store and product catalog. In Render, choose **New → Blueprint**, connect `aap-rauf/po-studio`, and apply the Blueprint. Set `APP_PASSWORD` to a private passphrase of at least 16 characters when prompted. Render provides the public URL; the service uses it automatically to create phone-pairing links.
+
+Render Free is a low-cost-start option, not reliable always-on hosting: the service sleeps after 15 minutes without inbound traffic, the first request after sleep can take about a minute, and Render can restart it. Phone pairing sessions are held in memory and end when the service restarts or sleeps. The desktop catalog and saved drafts remain in that browser's local storage. Render grants 750 free service hours per workspace per month; without a payment method, reaching usage limits suspends the service instead of charging an overage. See `PHONE-SYNC.md` for the deployment steps and limits.
 
 The repository should remain private: the generated desktop HTML contains store IDs and the current product catalog. Do not deploy it to a host you do not trust.
 
