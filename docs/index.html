@@ -88,7 +88,7 @@
         <div class="top-title"><div class="eyebrow">STORE STOCK ORDER</div><h1 id="viewTitle">Create PO</h1></div>
         <div class="top-spacer"></div>
         <div class="store-control" id="storeControl"><label for="storeSearch">Select store</label><div class="store-search-wrap"><input id="storeSearch" class="store-search" type="search" autocomplete="off" placeholder="Search stores..." role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="storeList"><div id="storeList" class="store-list" role="listbox" hidden></div></div></div>
-        <div class="top-actions"><span class="save-state" id="saveState"><i></i>Unsaved</span><button class="btn" id="saveBtn">↧ Save</button><button class="btn" id="pairPhoneBtn" type="button">▦ Pair phone</button><button class="btn primary" id="exportBtn">⇩ Download CSV</button></div>
+        <div class="top-actions"><span class="save-state" id="saveState"><i></i>Unsaved</span><button class="btn" id="saveBtn">↧ Save</button><button class="btn" id="sheetOpen" type="button">Phone scans</button><button class="btn" id="pairPhoneBtn" type="button">▦ Pair phone</button><button class="btn primary" id="exportBtn">⇩ Download CSV</button></div>
       </header>
       <div class="content">
         <section class="builder" id="builder">
@@ -117,6 +117,26 @@
     <div class="admin-actions"><button class="btn" type="button" data-close="csvImportDialog">Cancel</button></div>
   </div>
 </dialog>
+<dialog class="admin-dialog" id="sheetInbox" aria-labelledby="sheetTitle">
+  <div class="admin-form"><h2 id="sheetTitle">Phone scans</h2>
+    <details id="sheetSetup"><summary>Connect desktop</summary>
+      <p><a href="scan/setup.html" target="_blank" rel="noopener">Set up a private scan sheet</a></p>
+      <label for="sheetConfig">Connection details from your scan sheet</label>
+      <input type="password" autocomplete="off" id="sheetConfig">
+      <button type="button" class="btn" id="sheetSaveConfig">Connect desktop</button>
+    </details>
+    <section id="sheetConnected" hidden>
+      <details><summary>Connect phones</summary><div id="sheetQr" style="width:min(100%,280px);margin:auto"></div>
+        <a id="sheetPhoneLink" target="_blank" rel="noopener noreferrer">Open phone form</a></details>
+      <p id="sheetCount"></p><ul id="sheetRows" style="max-height:38vh;overflow:auto"></ul>
+      <button id="sheetRefresh" class="btn" type="button">Refresh scans</button>
+    </section>
+    <p role="status" id="sheetStatus"></p>
+    <div class="admin-actions"><button class="btn" type="button" data-close="sheetInbox">Close</button></div>
+  </div>
+</dialog>
+<script src="scan/vendor/qrcode.js"></script>
+<script src="scan/common.js"></script><script src="scan/desktop.js"></script>
 <script>
     (async()=>{
       let STORES=[];
@@ -292,6 +312,18 @@
         acceptCsv(event.dataTransfer.files);
       };
       document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>$(b.dataset.close).close()));
+      setupPhoneInbox({
+        currentStore:()=>storeId,
+        alreadyAdded:id=>items.some(item=>item.phoneScanIds?.includes(id)) || drafts().some(d=>(d.items||[]).some(item=>item.phoneScanIds?.includes(id))),
+        apply: row => {
+          const [id,,assignedStore,barcode,quantity]=row;
+          if(assignedStore!==storeId || !addScanned(barcode,Number(quantity)))return false;
+          const sku=inventoryByBarcode[normalizeBarcode(barcode)].sku;
+          const item=items.find(entry=>entry.sku===sku);
+          (item.phoneScanIds ||= []).push(id);
+          return true;
+        }
+      });
       await loadAdminData();if(STORES.length)restoreLastStore();void refreshStores();setOrderId();render();$('draftCount').textContent=drafts().length;
     })();
   </script>
