@@ -2,25 +2,12 @@ const el = id => document.getElementById(id);
 const message = text => el('status').textContent=text;
 const params = new URLSearchParams(location.hash.slice(1));
 const prior=JSON.parse(localStorage.getItem('po-scanner-device')||'null');
-const device = params.has('url') ? {url:params.get('url'),write:params.get('key')} : prior;
+const device = params.has('url') ? {url:params.get('url'),write:params.get('key'),store:params.get('store'),name:params.get('name'),po:params.get('po')} : prior;
 async function init(){
-  if(!device || !ScanService.validUrl(device.url) || !device.write) { el('add').disabled=true; message('Scan the QR code in PO Studio → Phone scans.');return; }
+  if(!device || !ScanService.validUrl(device.url) || !device.write || !device.store || !device.name || !/^[0-9a-f]{16}$/.test(device.po)) { el('add').disabled=true; message('Scan the QR code in PO Studio → Phone scans.');return; }
   localStorage.setItem('po-scanner-device',JSON.stringify(device));
   history.replaceState(null,'',location.pathname);
-  let stores=JSON.parse(localStorage.getItem('po-phone-stores')||'[]');
-  try {
-    const response=await fetch('https://docs.google.com/spreadsheets/d/1vtZ2Xmb4eKPFs_v-D-nVNAm2_d2TtqqaMFO93TtaKxM/gviz/tq?tqx=out:csv&gid=97757198',{cache:'no-store',signal:AbortSignal.timeout(12000)});
-    if(!response.ok) throw Error();
-    const [header,...rows]=csvRows(await response.text());
-    const name=header.indexOf('Store Name'),id=header.indexOf('Store ID');
-    if(name<0||id<0) throw Error();
-    stores=rows.filter(r=>r[id]&&r[name]).map(r=>[r[id],r[name]]);
-    localStorage.setItem('po-phone-stores',JSON.stringify(stores));
-  } catch { message(stores.length?'Using the last downloaded store list.':'Could not load stores. Reopen this page when online.'); }
-  el('store').add(new Option('Select store',''));
-  for(const [id,name] of new Map(stores)) el('store').add(new Option(name,id));
-  el('store').value=localStorage.getItem('po-phone-store')||'';
-  el('store').onchange=()=>localStorage.setItem('po-phone-store',el('store').value);
+  el('store').textContent=device.name;
   flush();
 }
 const prefix='po-send-'+(device?.url||'')+'-';
@@ -44,7 +31,7 @@ el('scanForm').onsubmit=event=>{
   event.preventDefault();
   const barcode=el('barcode').value.trim();
   if(!/^[a-zA-Z0-9][a-zA-Z0-9 ._:/+-]{0,127}$/.test(barcode)){message('Enter a valid product barcode.');return;}
-  const scan={id:crypto.randomUUID(),store:el('store').value,barcode,qty:Number(el('qty').value)};
+  const scan={id:device.po+crypto.randomUUID().replaceAll('-','').slice(-20),store:device.store,barcode,qty:Number(el('qty').value)};
   try {localStorage.setItem(prefix+scan.id,JSON.stringify(scan));}catch{message('Phone storage is full. Scan was not saved.');return;}
   el('barcode').value='';el('qty').value='1';message('Queued on phone.');flush();
 };
