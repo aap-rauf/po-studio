@@ -21,12 +21,12 @@ async function flush(){
   if(sending || !device)return;
   sending=true;
   try {
-    for(const key of keys()){
+    for(const key of keys().sort((a,b)=>JSON.parse(localStorage.getItem(a)).time-JSON.parse(localStorage.getItem(b)).time)){
       const scan=JSON.parse(localStorage.getItem(key));
       const result=await ScanService.request(device.url,{...scan,action:'submit',key:device.write});
       if(result.id!==scan.id) throw Error('Missing receipt.');
       localStorage.setItem(historyPrefix+scan.id,JSON.stringify(scan));localStorage.removeItem(key);renderItems();
-      message('Saved to sheet · '+scan.barcode+' × '+scan.qty);
+      message('Synced · '+scan.barcode);
     }
   } catch(error){message('Scan pending. '+error.message);}
   finally{sending=false;const n=keys().length;el('pending').textContent=n?n+' pending on this phone':'';el('retry').hidden=!n;}
@@ -36,10 +36,30 @@ el('scanForm').onsubmit=event=>{
   if(!paired){message(pairingHint);return;}
   const barcode=el('barcode').value.trim();
   if(!/^[a-zA-Z0-9][a-zA-Z0-9 ._:/+-]{0,127}$/.test(barcode)){message('Enter a valid product barcode.');return;}
-  const scan={id:device.po+crypto.randomUUID().replaceAll('-','').slice(-20),store:device.store,time:Date.now(),barcode,qty:Number(el('qty').value)};
-  try {localStorage.setItem(prefix+scan.id,JSON.stringify(scan));}catch{message('Phone storage is full. Scan was not saved.');return;}
-  el('barcode').value='';el('qty').value='1';message('Queued on phone.');renderItems();leave();flush();
+  const qty=Number(el('qty').value);
+  if(!/^[0-9]{1,6}$/.test(el('qty').value)||qty<1){message('Enter a quantity from 1 to 999999.');return;}
+  const delta=qty-(editing ? balances().get(editing)||0 : 0);
+  if(!queueChange(barcode,delta))return;
+  if(editing)leave();
+  else {page(true);el('barcode').focus();}
+  message('Saved on this phone.');flush();
 };
+let editing=null,selecting=false;
+const selected=new Set();
+function queueChange(barcode,delta){
+  try {
+    while(delta){
+      const qty=Math.min(999999,Math.abs(delta));
+      const random=crypto.randomUUID().replaceAll('-','');
+      // A dash after the PO token marks a subtraction in the append-only scan sheet.
+      const id=device.po+(delta<0?'-'+random.slice(-19):random.slice(-20));
+      const row={id,store:device.store,time:Date.now(),barcode,qty};
+      localStorage.setItem(prefix+id,JSON.stringify(row));
+      delta-=Math.sign(delta)*qty;
+    }
+    return true;
+  }catch{message('Phone storage is full. Check the item list before retrying.');renderItems();return false;}
+}
 el('retry').onclick=flush;window.addEventListener('online',flush);setInterval(()=>{if(keys().length)flush();},30000);
 const historyPrefix='po-scanned-'+(device?.url||'')+'-';
 const names=new Map();
@@ -58,66 +78,113 @@ async function loadNames(){
   } catch {}
   renderItems();
 }
-function renderItems(){
+function balances(){
   const all=new Map(), groups=new Map();
   for(const key of Object.keys(localStorage)){
     if(!device?.po || !(key.startsWith(prefix+device.po)||key.startsWith(historyPrefix+device.po)))continue;
     try{const row=JSON.parse(localStorage.getItem(key));if(row.store===device.store)all.set(row.id,row);}catch{}
   }
   for(const row of [...all.values()].sort((a,b)=>(b.time||0)-(a.time||0))){
-    groups.set(row.barcode,(groups.get(row.barcode)||0)+row.qty);
+    groups.set(row.barcode,(groups.get(row.barcode)||0)+(row.id[16]==='-'?-row.qty:row.qty));
   }
+  for(const [code,qty] of groups)if(qty<=0)groups.delete(code);
+  return groups;
+}
+function renderItems(){
+  const groups=balances();
   const list=el('items');list.replaceChildren();let units=0;
   for(const [barcode,qty] of groups){
     const li=document.createElement('li'), detail=document.createElement('div'),title=document.createElement('strong'),count=document.createElement('b');
     const name=names.get(barcode);title.textContent=name||barcode;detail.append(title);
     if(name){const label=document.createElement('small');label.textContent=barcode;detail.append(label);}
-    count.textContent='× '+qty;li.append(detail,count);list.append(li);units+=qty;
+        const button=document.createElement('button');button.className='itemRow';
+    if(selecting){
+      button.setAttribute('aria-pressed',String(selected.has(barcode)));
+      const mark=document.createElement('span');mark.textContent=selected.has(barcode)?'☑':'☐';button.append(mark);
+    }
+    button.onclick=()=>{
+      if(selecting){if(selected.has(barcode))selected.delete(barcode);else selected.add(barcode);renderItems();}
+      else openForm(barcode);
+    };
+    count.textContent='× '+qty;button.append(detail,count);li.append(button);list.append(li);units+=qty;
   }
+  if(!groups.size){selecting=false;selected.clear();}
+  el('selectMode').hidden=!groups.size;el('selectMode').textContent=selecting?'Cancel selection':'Select items';
+  el('selectAll').hidden=!selecting;el('deleteSelected').hidden=!selecting;
+  el('deleteSelected').disabled=!selected.size;
   el('empty').hidden=groups.size>0;el('units').textContent=units?units+' units':'';
 }
-function page(form){
+function removeCodes(codes){
+  const totals=balances();
+  if(!confirm('Delete '+codes.length+' selected item'+(codes.length===1?'':'s')+' from this order?'))return false;
+  for(const code of codes)if(!queueChange(code,-(totals.get(code)||0)))return false;
+  selecting=false;selected.clear();renderItems();flush();return true;
+}
+el('selectMode').onclick=()=>{selecting=!selecting;selected.clear();renderItems();};
+el('selectAll').onclick=()=>{for(const code of balances().keys())selected.add(code);renderItems();};
+el('deleteSelected').onclick=()=>removeCodes([...selected]);
+el('deleteItem').onclick=()=>{if(editing && removeCodes([editing]))leave();};
+function page(form,code=null){
+  editing=form?code:null;
   el('formPage').hidden=!form;el('listPage').hidden=form;el('back').hidden=!form;
-  if(form){el('scanForm').reset();updateQuantityButtons();message(paired?'':pairingHint);}
-  else {stopCamera();renderItems();}
+  if(form){
+    el('scanForm').reset();el('formTitle').textContent=editing?'Edit item':'Add item';
+    el('barcode').readOnly=Boolean(editing);el('cameraBtn').hidden=Boolean(editing);
+    el('deleteItem').hidden=!editing;
+    if(editing){el('barcode').value=editing;el('qty').value=balances().get(editing);}
+    updateQuantityButtons();message(paired?'':pairingHint);
+  }else{stopCamera();renderItems();}
 }
+function openForm(code=null){page(true,code);history.pushState({scanForm:true,code},'');}
 function leave(){if(history.state?.scanForm)history.back();else page(false);}
-el('newItem').onclick=()=>{page(true);history.pushState({scanForm:true},'');};
+el('newItem').onclick=()=>openForm();
 el('cancel').onclick=leave;el('back').onclick=leave;
-window.addEventListener('popstate',()=>page(Boolean(history.state?.scanForm)));
-const quantity = el('qty');
+window.addEventListener('popstate',()=>page(Boolean(history.state?.scanForm),history.state?.code));
+const quantity=el('qty');
 function updateQuantityButtons(){
-  el('minus').disabled = quantity.valueAsNumber <= Number(quantity.min);
-  el('plus').disabled = quantity.valueAsNumber >= Number(quantity.max);
+  el('minus').disabled=Number(quantity.value)<=1;el('plus').disabled=Number(quantity.value)>=999999;
 }
-quantity.addEventListener('input', updateQuantityButtons);
-for(const [id,step] of [['minus','stepDown'],['plus','stepUp']]){
-  el(id).onclick=()=>{
-    quantity[step]();
-    quantity.dispatchEvent(new Event('input',{bubbles:true}));
-  };
-}
-let camera,startPromise;
+quantity.addEventListener('beforeinput',e=>{if(e.data && /[^0-9]/.test(e.data))e.preventDefault();});
+quantity.addEventListener('paste',e=>{if(/[^0-9]/.test(e.clipboardData.getData('text')))e.preventDefault();});
+quantity.addEventListener('input',()=>{quantity.value=quantity.value.replace(/[^0-9]/g,'');updateQuantityButtons();});
+for(const [id,delta] of [['minus',-1],['plus',1]])el(id).onclick=()=>{
+  quantity.value=Math.min(999999,Math.max(1,Number(quantity.value)+delta));updateQuantityButtons();
+};
+const viewer=el('viewfinder');
+let reader=null,starting,facing='environment',light=false;
 async function stopCamera(){
-  const current=camera;if(!current)return;
-  camera=null;el('cameraBtn').disabled=true;
-  try{await startPromise;if(current.isScanning)await current.stop();current.clear();}catch{}
-  finally{el('cameraBtn').disabled=false;el('cameraBtn').setAttribute('aria-label','Scan barcode with camera');}
+  const current=reader;reader=null;
+  if(viewer.open)viewer.close();
+  if(!current)return;
+  el('cameraBtn').disabled=true;
+  try{await starting;if(current.isScanning)await current.stop();current.clear();}catch{}
+  finally{el('cameraBtn').disabled=false;}
 }
-el('cameraBtn').onclick=async()=>{
-  if(camera){await stopCamera();return;}
-  const btn=el('cameraBtn');btn.disabled=true;
+async function startCamera(){
+  if(reader)return;
+  viewer.showModal();el('torch').hidden=true;el('flip').hidden=true;light=false;
   try{
-    const current=camera=new Html5Qrcode('camera');
-    startPromise=current.start({facingMode:'environment'},{fps:8},async value=>{
-      if(camera!==current || el('formPage').hidden)return;
-      el('barcode').value=value;await stopCamera();
-      if(!el('formPage').hidden){el('qty').focus();el('qty').select();}
+    const current=reader=new Html5Qrcode('camera');
+    starting=current.start({facingMode:facing},{fps:10},async code=>{
+      if(reader!==current)return;
+      el('barcode').value=code;await stopCamera();quantity.focus();quantity.select();
     });
-    await startPromise;
-    if(camera===current)btn.setAttribute('aria-label','Close camera');
-  }catch{camera=null;message('Camera unavailable. Allow camera access or type the barcode.');}
-  finally{btn.disabled=false;}
+    await starting;
+    if(reader!==current)return;
+    const track=el('camera').querySelector('video')?.srcObject?.getVideoTracks()[0];
+    el('torch').hidden=!track?.getCapabilities?.().torch;
+    el('torch').setAttribute('aria-pressed','false');
+    const devices=await navigator.mediaDevices.enumerateDevices();
+    el('flip').hidden=devices.filter(d=>d.kind==='videoinput').length<2;
+  }catch{await stopCamera();message('Camera unavailable. Allow camera access or type the barcode.');}
+}
+el('cameraBtn').onclick=startCamera;
+el('closeCamera').onclick=stopCamera;
+viewer.addEventListener('cancel',e=>{e.preventDefault();stopCamera();});
+el('flip').onclick=async()=>{await stopCamera();facing=facing==='environment'?'user':'environment';await startCamera();};
+el('torch').onclick=async()=>{
+  try{await reader.applyVideoConstraints({advanced:[{torch:!light}]});light=!light;el('torch').setAttribute('aria-pressed',String(light));}
+  catch{el('torch').hidden=true;}
 };
 window.addEventListener('pagehide',stopCamera);
 init().catch(e=>message(e.message));

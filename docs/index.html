@@ -321,11 +321,26 @@
           }
           return phoneSession?.store===storeId ? phoneSession.token : '';
         },
-        alreadyAdded:id=>items.some(item=>item.phoneScanIds?.includes(id)) || drafts().some(d=>(d.items||[]).some(item=>item.phoneScanIds?.includes(id))),
+        alreadyAdded:id=>phoneSession?.processed?.includes(id) || items.some(item=>item.phoneScanIds?.includes(id)) || drafts().some(d=>(d.items||[]).some(item=>item.phoneScanIds?.includes(id))),
         apply: row => {
           const [id,,assignedStore,barcode,quantity]=row;
           const match=inventoryByBarcode[normalizeBarcode(barcode)];
-          if(!match || match.ambiguous || assignedStore!==storeId || !addScanned(barcode,Number(quantity)))return false;
+          if(!match || match.ambiguous || assignedStore!==storeId)return false;
+          if(id[16]==='-'){
+            const item=items.find(entry=>entry.sku===match.sku);
+            if(item){
+              item.modifiedStock=Math.max(0,Number(item.modifiedStock)-Number(quantity));
+              if(!item.modifiedStock){
+                (phoneSession.processed ||= []).push(...(item.phoneScanIds||[]));
+                items.splice(items.indexOf(item),1);
+              }
+              render();dirtyState();
+            }
+            (phoneSession.processed ||= []).push(id);
+            return true;
+          }
+          if(!addScanned(barcode,Number(quantity)))return false;
+          (phoneSession.processed ||= []).push(id);
           const sku=inventoryByBarcode[normalizeBarcode(barcode)].sku;
           const item=items.find(entry=>entry.sku===sku);
           (item.phoneScanIds ||= []).push(id);
