@@ -1,10 +1,14 @@
 const el = id => document.getElementById(id);
 const message = text => el('status').textContent=text;
 const params = new URLSearchParams(location.hash.slice(1));
-const prior=JSON.parse(localStorage.getItem('po-scanner-device')||'null');
+let prior;
+try { prior=JSON.parse(localStorage.getItem('po-scanner-device')); } catch {}
 const device = params.has('url') ? {url:params.get('url'),write:params.get('key'),store:params.get('store'),name:params.get('name'),po:params.get('po')} : prior;
+const pairingHint = "Scan the QR code under Phone scans on your desktop to save items to a store.";
+let paired=false;
 async function init(){
-  if(!device || !ScanService.validUrl(device.url) || !device.write || !device.store || !device.name || !/^[0-9a-f]{16}$/.test(device.po)) { el('add').disabled=true; message('Scan the QR code in PO Studio → Phone scans.');return; }
+  if(!device || !ScanService.validUrl(device.url) || !device.write || !device.store || !device.name || !/^[0-9a-f]{16}$/.test(device.po)) { el('add').disabled=true; message(pairingHint);return; }
+  paired=true;
   localStorage.setItem('po-scanner-device',JSON.stringify(device));
   history.replaceState(null,'',location.pathname);
   el('store').textContent=device.name;el('newItem').disabled=false;renderItems();loadNames();
@@ -29,6 +33,7 @@ async function flush(){
 }
 el('scanForm').onsubmit=event=>{
   event.preventDefault();
+  if(!paired){message(pairingHint);return;}
   const barcode=el('barcode').value.trim();
   if(!/^[a-zA-Z0-9][a-zA-Z0-9 ._:/+-]{0,127}$/.test(barcode)){message('Enter a valid product barcode.');return;}
   const scan={id:device.po+crypto.randomUUID().replaceAll('-','').slice(-20),store:device.store,time:Date.now(),barcode,qty:Number(el('qty').value)};
@@ -73,14 +78,25 @@ function renderItems(){
 }
 function page(form){
   el('formPage').hidden=!form;el('listPage').hidden=form;el('back').hidden=!form;
-  if(form){el('scanForm').reset();message('');}
+  if(form){el('scanForm').reset();updateQuantityButtons();message(paired?'':pairingHint);}
   else {stopCamera();renderItems();}
 }
 function leave(){if(history.state?.scanForm)history.back();else page(false);}
-el('newItem').onclick=()=>{history.pushState({scanForm:true},'',location.pathname);page(true);};
+el('newItem').onclick=()=>{page(true);history.pushState({scanForm:true},'');};
 el('cancel').onclick=leave;el('back').onclick=leave;
 window.addEventListener('popstate',()=>page(Boolean(history.state?.scanForm)));
-for(const [id,delta] of [['minus',-1],['plus',1]])el(id).onclick=()=>{el('qty').value=Math.max(1,Math.min(999999,(Number(el('qty').value)||0)+delta));};
+const quantity = el('qty');
+function updateQuantityButtons(){
+  el('minus').disabled = quantity.valueAsNumber <= Number(quantity.min);
+  el('plus').disabled = quantity.valueAsNumber >= Number(quantity.max);
+}
+quantity.addEventListener('input', updateQuantityButtons);
+for(const [id,step] of [['minus','stepDown'],['plus','stepUp']]){
+  el(id).onclick=()=>{
+    quantity[step]();
+    quantity.dispatchEvent(new Event('input',{bubbles:true}));
+  };
+}
 let camera,startPromise;
 async function stopCamera(){
   const current=camera;if(!current)return;
