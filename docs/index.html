@@ -135,8 +135,8 @@
       <button type="button" class="btn" id="sheetSaveConfig">Connect desktop</button>
     </details>
     <section id="sheetConnected" hidden>
-      <div id="sheetQr" style="width:min(100%,280px);margin:auto"></div>
-        <details><summary>Recover an existing phone pairing</summary><label for="recoverCode">Pairing code from the phone</label><input id="recoverCode" maxlength="16" autocomplete="off"><button type="button" class="btn" id="recoverPhone">Recover scans</button></details><a id="sheetPhoneLink" target="_blank" rel="noopener noreferrer">Open phone form</a>
+      <p>Open your phone camera and scan this QR code. Saved items appear in this order automatically.</p><div id="sheetQr" style="width:min(100%,280px);margin:auto"></div>
+        <details><summary>Already scanned items on this phone?</summary><p>On the phone’s Scanned items screen, open Pairing details and copy the recovery code.</p><label for="recoverCode">Pairing code from the phone</label><input id="recoverCode" maxlength="16" autocomplete="off"><button type="button" class="btn" id="recoverPhone">Recover scans</button></details><a id="sheetPhoneLink" target="_blank" rel="noopener noreferrer">Open scanner in this browser</a>
     </section>
     <p role="status" id="sheetStatus"></p>
     <div class="admin-actions"><button class="btn" type="button" data-close="sheetInbox">Close</button></div>

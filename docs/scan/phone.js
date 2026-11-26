@@ -6,10 +6,13 @@ try { prior=JSON.parse(localStorage.getItem('po-scanner-device')); } catch {}
 const device = params.has('url') ? {url:params.get('url'),write:params.get('key'),store:params.get('store'),name:params.get('name'),po:params.get('po')} : prior;
 const pairingHint = "Scan the QR code under Phone scans on your desktop to save items to a store.";
 let paired=false;
-el('syncState').onclick=()=>message(paired?'Desktop recovery code: '+device.po:pairingHint);
+el('copyCode').onclick=async()=>{
+  try{await navigator.clipboard.writeText(device.po);el('copyResult').textContent='Code copied.';}
+  catch{const range=document.createRange();range.selectNodeContents(el('pairCode'));const selection=getSelection();selection.removeAllRanges();selection.addRange(range);el('copyResult').textContent='Code selected. Use Copy on your device.';}
+};
 async function init(){
   if(!device || !ScanService.validUrl(device.url) || !device.write || !device.store || !device.name || !/^[0-9a-f]{16}$/.test(device.po)) { el('add').disabled=true; message(pairingHint);return; }
-  paired=true;
+  paired=true;el('pairDetails').hidden=false;el('pairCode').textContent=device.po;
   localStorage.setItem('po-scanner-device',JSON.stringify(device));
   history.replaceState(null,'',location.pathname);
   el('store').textContent=device.name;el('newItem').disabled=false;renderItems();loadNames();
@@ -18,13 +21,16 @@ async function init(){
 const prefix='po-send-'+(device?.url||'')+'-';
 let sending=false;
 function keys(){return Object.keys(localStorage).filter(k=>k.startsWith(prefix));}
+function keysForReceipt(){
+  return Object.keys(localStorage).some(key=>key.startsWith(historyPrefix+device.po));
+}
 function updateSyncState(){
   const pending=keys().filter(key=>key.startsWith(prefix+device?.po)).length;
   let state='Unpaired';
   if(paired){
     if(!navigator.onLine)state=pending?'Offline · '+pending+' pending':'Offline';
     else if(pending)state=sending?'Syncing…':pending+' pending';
-    else state='Synced';
+    else state=keysForReceipt()?'Sent to sheet':'Ready';
   }
   el('syncState').textContent=state;
 }
@@ -53,7 +59,10 @@ el('scanForm').onsubmit=event=>{
   const delta=qty-(editing ? balances().get(editing)||0 : 0);
   if(!queueChange(barcode,delta))return;
   if(editing)leave();
-  else {page(true);el('barcode').focus();}
+  else {
+    page(true);el('saveReceipt').textContent='Saved on phone · '+(names.get(barcode)||barcode)+' × '+qty;
+    el('saveReceipt').hidden=false;el('barcode').focus();
+  }
   flush();
 };
 let editing=null,selecting=false;
@@ -155,10 +164,10 @@ el('selectAll').onclick=()=>{for(const code of balances().keys())selected.add(co
 el('deleteSelected').onclick=()=>removeCodes([...selected]);
 el('deleteItem').onclick=()=>{if(editing && removeCodes([editing]))leave();};
 function page(form,code=null){
-  editing=form?code:null;
+  el('saveReceipt').hidden=true;editing=form?code:null;
   el('formPage').hidden=!form;el('listPage').hidden=form;el('back').hidden=!form;
   if(form){
-    el('scanForm').reset();el('formTitle').textContent=editing?'Edit item':'Add item';
+    el('scanForm').reset();el('formTitle').textContent=editing?'Edit item':'Add item';el('add').textContent=editing?'Save changes':'Save & add next';
     el('barcode').readOnly=Boolean(editing);el('cameraBtn').hidden=Boolean(editing);
     el('deleteItem').hidden=!editing;
     if(editing){el('barcode').value=editing;el('qty').value=balances().get(editing);}
