@@ -97,7 +97,7 @@
           <section class="card scan-card"><div class="scan-header"><h2>Enter a product barcode</h2></div><div class="scan-line"><input id="scanInput" type="text" autocomplete="off" placeholder="Scan or enter barcode" aria-label="Enter product barcode"><div class="scan-quantity"><label for="scanQuantity">Quantity</label><input id="scanQuantity" type="number" min="1" step="1" value="1" aria-label="Modified stock quantity" title="Modified stock quantity"></div><button class="btn primary" id="lookupBtn">Add</button></div></section>
           <aside class="card summary-card"><div class="summary-head"><h2>Order summary</h2></div><div class="summary-meta"><div class="meta-cell"><span>SKUs</span><strong id="summarySkus">0</strong></div><div class="meta-cell"><span>Units</span><strong id="summaryUnits">0</strong></div><div class="meta-cell"><span>Store</span><strong id="summaryStore">None</strong></div></div></aside>
         </section>
-        <section class="card items-card" id="itemsCard"><div class="card-head"><div class="card-title"><h2>Scanned items</h2></div><span id="itemCountLabel">0 items</span></div><div class="table-wrap"><table class="items-table"><colgroup><col style="width:12%"><col style="width:10%"><col style="width:18%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:17%"><col style="width:3%"></colgroup><thead><tr><th>Barcode</th><th>SKU</th><th>Product</th><th>Category</th><th>Recommended</th><th>Modified stock</th><th>Reason</th><th>Expected delivery</th><th></th></tr></thead><tbody id="itemsBody"></tbody></table><div class="empty-items" id="emptyItems"><b>No items scanned yet</b>Scan a product barcode to add it to this store's PO.</div></div><div class="items-footer"><button id="clearItems">Clear all items</button></div></section>
+        <section class="card items-card" id="itemsCard"><div class="card-head"><div class="card-title"><h2>Scanned items</h2></div><small id="phoneIssue" role="status" hidden></small><span id="itemCountLabel">0 items</span></div><div class="table-wrap"><table class="items-table"><colgroup><col style="width:12%"><col style="width:10%"><col style="width:18%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:17%"><col style="width:3%"></colgroup><thead><tr><th>Barcode</th><th>SKU</th><th>Product</th><th>Category</th><th>Recommended</th><th>Modified stock</th><th>Reason</th><th>Expected delivery</th><th></th></tr></thead><tbody id="itemsBody"></tbody></table><div class="empty-items" id="emptyItems"><b>No items scanned yet</b>Scan a product barcode to add it to this store's PO.</div></div><div class="items-footer"><button id="clearItems">Clear all items</button></div></section>
         <section class="saved-view" id="savedView"><div class="saved-head"><h2>Saved drafts</h2></div><div class="draft-list" id="draftList"></div></section>
         <section class="admin-view" id="adminView"><div class="admin-intro"><h2>Admin</h2><p>Use the sidebar to manage products or view stores. Changes stay in this browser.</p></div><section class="card admin-card is-collapsed stores-card"><div class="admin-card-head"><h3>Stores <span class="admin-result-count" id="adminStoreCount">0</span></h3><div class="admin-actions"><button class="btn" id="refreshStores" type="button">Refresh</button><button class="btn primary" id="addLocalStore" type="button">＋ Add store</button><button class="btn admin-collapse" id="toggleStoresBtn" type="button" aria-expanded="false" aria-controls="adminStoresContent" aria-label="Expand stores" title="Expand stores"><span aria-hidden="true">⌄</span></button></div></div><div class="admin-collapsible" id="adminStoresContent" hidden><p class="admin-note" id="storeSyncStatus" role="status"></p><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Store name</th><th>Store ID</th></tr></thead><tbody id="adminStoresBody"></tbody></table></div><div class="admin-empty" id="adminStoresEmpty" hidden>No stores to display.</div></div></section><section class="card admin-card is-collapsed products-card"><div class="admin-card-head"><h3>Inventory catalog</h3><div class="admin-card-controls"><span class="admin-result-count" id="adminInventoryCount"></span><button class="btn admin-collapse" id="toggleInventoryBtn" type="button" aria-expanded="false" aria-controls="adminInventoryContent" aria-label="Expand inventory catalog" title="Expand inventory catalog"><span aria-hidden="true">⌄</span></button></div></div><div class="admin-collapsible" id="adminInventoryContent" hidden><div class="admin-toolbar"><input class="admin-search" id="adminInventorySearch" type="search" placeholder="Search barcode, SKU, product, or store ID"><button id="importProducts" class="btn" type="button" aria-haspopup="dialog">⇧ Import products</button><button class="btn primary" id="addProductBtn" type="button">＋ Add product</button></div><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>SKU</th><th>Product</th><th>Barcode(s)</th><th>Category</th></tr></thead><tbody id="adminInventoryBody"></tbody></table></div><div class="admin-empty" id="adminInventoryEmpty" hidden>No matching SKUs.</div></div></section></section>
       </div>
@@ -136,7 +136,7 @@
     </details>
     <section id="sheetConnected" hidden>
       <div id="sheetQr" style="width:min(100%,280px);margin:auto"></div>
-        <a id="sheetPhoneLink" target="_blank" rel="noopener noreferrer">Open phone form</a>
+        <details><summary>Recover an existing phone pairing</summary><label for="recoverCode">Pairing code from the phone</label><input id="recoverCode" maxlength="16" autocomplete="off"><button type="button" class="btn" id="recoverPhone">Recover scans</button></details><a id="sheetPhoneLink" target="_blank" rel="noopener noreferrer">Open phone form</a>
     </section>
     <p role="status" id="sheetStatus"></p>
     <div class="admin-actions"><button class="btn" type="button" data-close="sheetInbox">Close</button></div>
@@ -153,10 +153,26 @@
       function csvRows(text){text=text.replace(/^\uFEFF/,'');const rows=[];let row=[],cell='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){cell+='"';i++}else if(c==='"')quoted=false;else cell+=c}else if(c==='"')quoted=true;else if(c===','){row.push(cell);cell=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(v=>v.trim()!==''))rows.push(row);row=[];cell=''}else cell+=c}row.push(cell);if(row.some(v=>v.trim()!==''))rows.push(row);return rows}
       function csvCell(v){const s=String(v??'');return /[",\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s}
       function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2500)}
-      function dirtyState(){$('saveState').innerHTML='<i></i>Unsaved'}
+      function dirtyState(){savePairedOrder();$('saveState').innerHTML='<i></i>Unsaved'}
       function escapeText(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
       let phoneSession = null;
-      function setOrderId(){phoneSession=null;orderId=`PO-${String(Date.now()).slice(-6)}`}
+      const snapshotKey='po-studio-paired-tab';
+      function savePairedOrder(){
+        try{
+          if(phoneSession?.store!==storeId || !phoneSession) sessionStorage.removeItem(snapshotKey);
+          else sessionStorage.setItem(snapshotKey,JSON.stringify({phoneSession,orderId,storeId,storeName,items,currentCompanyName,currentNotes}));
+        }catch{toast('Could not keep the paired order for reload. Save it as a draft.');}
+      }
+      function restorePairedOrder(){
+        let data;
+        try{data=JSON.parse(sessionStorage.getItem(snapshotKey));}catch{}
+        if(!data?.phoneSession || data.phoneSession.store!==data.storeId || !Array.isArray(data.items))return false;
+        ({phoneSession,orderId,storeId,storeName,items,currentCompanyName,currentNotes}=data);
+        $('storeSearch').value=storeName;buildInventory();return true;
+      }
+      window.addEventListener('pagehide',savePairedOrder);
+
+      function setOrderId(){phoneSession=null;savePairedOrder();orderId=`PO-${String(Date.now()).slice(-6)}`}
       function openStoreList(query){const q=(query??'').trim().toLocaleLowerCase();storeResults=STORES.filter(s=>s.name.toLocaleLowerCase().includes(q)||s.id.toLocaleLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name));activeStoreIndex=storeResults.length?0:-1;const list=$('storeList');list.replaceChildren();if(!storeResults.length){const none=document.createElement('div');none.className='store-none';none.textContent='No stores found';list.appendChild(none)}else storeResults.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.className='store-option'+(i===activeStoreIndex?' active':'');b.setAttribute('role','option');b.setAttribute('aria-selected',String(i===activeStoreIndex));b.textContent=s.name;b.addEventListener('mousedown',e=>e.preventDefault());b.addEventListener('click',()=>chooseStore(s));list.appendChild(b)});list.hidden=false;$('storeSearch').setAttribute('aria-expanded','true')}
       function closeStoreList(){ $('storeList').hidden=true;$('storeSearch').setAttribute('aria-expanded','false');activeStoreIndex=-1 }
       function restoreLastStore(){let savedId='';try{savedId=localStorage.getItem("po-studio-last-store-id")||''}catch{}const saved=STORES.find(s=>s.id===savedId);if(!saved){if(savedId)try{localStorage.removeItem("po-studio-last-store-id")}catch{}return}storeId=saved.id;storeName=saved.name;$("storeSearch").value=storeName;$("summaryStore").textContent=storeName}function chooseStore(s){if(items.length&&s.id!==storeId){$('storeSearch').value=storeName;closeStoreList();toast('Start a new PO before changing stores');return}storeId=s.id;storeName=s.name;try{localStorage.setItem("po-studio-last-store-id",storeId)}catch{}$('storeSearch').value=s.name;$('summaryStore').textContent=s.name;closeStoreList();if(inventoryRecords.length)buildInventory();dirtyState()}
@@ -164,7 +180,12 @@
       function normalizeBarcode(value){const code=String(value??'').trim().replace(/^0+/,'');return (code||'0').toLocaleLowerCase()}
       const ADMIN_INVENTORY_HEADERS=['Barcode','SKU','Product','Category','Recommended_Stock','Store_ID'];
       function catalogSkuKey(row){return String(row[1]||'').trim().toLocaleLowerCase()+'\u001f'+String(row[5]||'').trim().toLocaleLowerCase()}
-      function uniqueCatalogRows(rows){const unique=new Map();for(const source of rows){const row=source.slice(0,6).map(value=>String(value??'').trim());if(!row[1])continue;unique.set(catalogSkuKey(row),row)}return Array.from(unique.values())}
+      function uniqueCatalogRows(rows){const unique=new Map();for(const source of rows){const row=source.slice(0,6).map(value=>String(value??'').trim());if(!row[1])continue;const key=catalogSkuKey(row),previous=unique.get(key);
+        if(previous){
+          const codes=[previous[0],row[0]].join(',').split(/[,;|\n]+/).map(code=>code.trim()).filter(Boolean);
+          row[0]=[...new Set(codes)].join(',');
+        }
+        unique.set(key,row)}return Array.from(unique.values())}
       function normalizeCatalog(headers,rows){const col=regex=>headers.findIndex(h=>regex.test(String(h).trim())),b=col(/^(bar ?codes?|ean|upc|gtin)$/i),sku=col(/^(sku|sku_id|sku id)$/i),product=col(/^(product|product name|product_name|item|item name|description)$/i),recommended=col(/^(recommended_stock|recommended stock|recommended quantity|target stock)$/i),store=col(/^(store_id|store id)$/i);let category=col(/^parent[_ ]category$/i);if(category<0)category=col(/^(category|category name)$/i);if(b<0||sku<0||product<0)return null;return uniqueCatalogRows(rows.map(row=>[String(row[b]||'').trim(),String(row[sku]||'').trim(),String(row[product]||'').trim(),category>=0?String(row[category]||'').trim():'',recommended>=0?(String(row[recommended]||'').trim()||'0'):'0',store>=0?String(row[store]||'').trim():'']).filter(row=>row[0]&&row[1]&&row[2]))}
       function loadEmbeddedInventory(){inventoryHeaders=ADMIN_INVENTORY_HEADERS.slice();inventoryRecords=uniqueCatalogRows(INVENTORY.map(row=>[String(row[0]||''),String(row[1]||''),String(row[2]||''),String(row[3]||''),'0','']))}
       async function packAdminCatalog(value){if(!window.CompressionStream)return JSON.stringify({encoding:'json',data:value});const stream=new Blob([value]).stream().pipeThrough(new CompressionStream('gzip')),bytes=new Uint8Array(await new Response(stream).arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return JSON.stringify({encoding:'gzip-base64',data:btoa(binary)})}
@@ -345,9 +366,17 @@
         currentStore:()=>storeId,
         storeLabel:()=>storeName,
         notify:toast,
+        recover:token=>{
+          if(phoneSession?.token===token)return;
+          if(items.length)throw Error('Save this order and start an empty PO before recovering a different pairing.');
+          const draft=drafts().find(d=>d.phoneSession?.token===token && d.storeId===storeId);
+          if(draft)loadDraft(draft);
+          else phoneSession={store:storeId,token};
+          savePairedOrder();
+        },
         session:create=>{
           if (create && (!phoneSession || phoneSession.store !== storeId)) {
-            phoneSession={store:storeId,token:crypto.randomUUID().replaceAll('-','').slice(0,16)};
+            phoneSession={store:storeId,token:crypto.randomUUID().replaceAll('-','').slice(0,16)};savePairedOrder();
           }
           return phoneSession?.store===storeId ? phoneSession.token : '';
         },
@@ -366,18 +395,18 @@
               }
               render();dirtyState();
             }
-            (phoneSession.processed ||= []).push(id);
+            (phoneSession.processed ||= []).push(id);savePairedOrder();
             return true;
           }
           if(!addScanned(barcode,Number(quantity)))return false;
           (phoneSession.processed ||= []).push(id);
           const sku=inventoryByBarcode[normalizeBarcode(barcode)].sku;
           const item=items.find(entry=>entry.sku===sku);
-          (item.phoneScanIds ||= []).push(id);
+          (item.phoneScanIds ||= []).push(id);savePairedOrder();
           return true;
         }
       });
-      await loadAdminData();if(STORES.length)restoreLastStore();void refreshStores();setOrderId();render();$('draftCount').textContent=drafts().length;
+      await loadAdminData();if(!restorePairedOrder()){if(STORES.length)restoreLastStore();setOrderId();}void refreshStores();render();$('draftCount').textContent=drafts().length;
     })();
   </script>
 </body>

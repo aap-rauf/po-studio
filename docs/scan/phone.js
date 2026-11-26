@@ -6,6 +6,7 @@ try { prior=JSON.parse(localStorage.getItem('po-scanner-device')); } catch {}
 const device = params.has('url') ? {url:params.get('url'),write:params.get('key'),store:params.get('store'),name:params.get('name'),po:params.get('po')} : prior;
 const pairingHint = "Scan the QR code under Phone scans on your desktop to save items to a store.";
 let paired=false;
+el('syncState').onclick=()=>message(paired?'Desktop recovery code: '+device.po:pairingHint);
 async function init(){
   if(!device || !ScanService.validUrl(device.url) || !device.write || !device.store || !device.name || !/^[0-9a-f]{16}$/.test(device.po)) { el('add').disabled=true; message(pairingHint);return; }
   paired=true;
