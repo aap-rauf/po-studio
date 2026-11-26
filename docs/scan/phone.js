@@ -17,19 +17,30 @@ async function init(){
 const prefix='po-send-'+(device?.url||'')+'-';
 let sending=false;
 function keys(){return Object.keys(localStorage).filter(k=>k.startsWith(prefix));}
+function updateSyncState(){
+  const pending=keys().filter(key=>key.startsWith(prefix+device?.po)).length;
+  let state='Unpaired';
+  if(paired){
+    if(!navigator.onLine)state=pending?'Offline · '+pending+' pending':'Offline';
+    else if(pending)state=sending?'Syncing…':pending+' pending';
+    else state='Synced';
+  }
+  el('syncState').textContent=state;
+}
+window.addEventListener('offline',updateSyncState);
 async function flush(){
   if(sending || !device)return;
-  sending=true;
+  sending=true;updateSyncState();
   try {
     for(const key of keys().sort((a,b)=>JSON.parse(localStorage.getItem(a)).time-JSON.parse(localStorage.getItem(b)).time)){
       const scan=JSON.parse(localStorage.getItem(key));
       const result=await ScanService.request(device.url,{...scan,action:'submit',key:device.write});
       if(result.id!==scan.id) throw Error('Missing receipt.');
       localStorage.setItem(historyPrefix+scan.id,JSON.stringify(scan));localStorage.removeItem(key);renderItems();
-      message('Synced · '+scan.barcode);
+      if(el('status').textContent.startsWith('Scan pending.'))message('');
     }
   } catch(error){message('Scan pending. '+error.message);}
-  finally{sending=false;const n=keys().length;el('pending').textContent=n?n+' pending on this phone':'';el('retry').hidden=!n;}
+  finally{sending=false;updateSyncState();const n=keys().length;el('pending').textContent=n?n+' pending on this phone':'';el('retry').hidden=!n;}
 }
 el('scanForm').onsubmit=event=>{
   event.preventDefault();
@@ -42,7 +53,7 @@ el('scanForm').onsubmit=event=>{
   if(!queueChange(barcode,delta))return;
   if(editing)leave();
   else {page(true);el('barcode').focus();}
-  message('Saved on this phone.');flush();
+  flush();
 };
 let editing=null,selecting=false;
 const selected=new Set();
@@ -92,7 +103,7 @@ function balances(){
 }
 function renderItems(){
   const groups=balances();
-  const list=el('items');list.replaceChildren();let units=0;
+  const list=el('items');list.replaceChildren();
   for(const [barcode,qty] of groups){
     const li=document.createElement('li'), detail=document.createElement('div'),title=document.createElement('strong'),count=document.createElement('b');
     const name=names.get(barcode);title.textContent=name||barcode;detail.append(title);
@@ -102,17 +113,35 @@ function renderItems(){
       button.setAttribute('aria-pressed',String(selected.has(barcode)));
       const mark=document.createElement('span');mark.textContent=selected.has(barcode)?'☑':'☐';button.append(mark);
     }
+    let timer, startX, startY, held=false;
+    function selectRow(){
+      selecting=true;selected.add(barcode);renderItems();
+    }
+    button.onpointerdown=e=>{
+      if(e.button!==0 || !e.isPrimary)return;
+      held=false;startX=e.clientX;startY=e.clientY;
+      timer=setTimeout(()=>{if(button.isConnected){held=true;selectRow();}},500);
+    };
+    button.onpointermove=e=>{
+      if(Math.hypot(e.clientX-startX,e.clientY-startY)>10)clearTimeout(timer);
+    };
+    button.onpointercancel=button.onpointerleave=button.onpointerup=()=>clearTimeout(timer);
+    button.oncontextmenu=e=>{e.preventDefault();clearTimeout(timer);if(!held){held=true;selectRow();}};
+    button.onkeydown=e=>{
+      if(e.key==='F10' && e.shiftKey){e.preventDefault();selectRow();el('selectAll').focus();}
+    };
     button.onclick=()=>{
+      if(held){held=false;return;}
       if(selecting){if(selected.has(barcode))selected.delete(barcode);else selected.add(barcode);renderItems();}
       else openForm(barcode);
     };
-    count.textContent='× '+qty;button.append(detail,count);li.append(button);list.append(li);units+=qty;
+    count.textContent='× '+qty;button.append(detail,count);li.append(button);list.append(li);
   }
   if(!groups.size){selecting=false;selected.clear();}
-  el('selectMode').hidden=!groups.size;el('selectMode').textContent=selecting?'Cancel selection':'Select items';
+  el('selectionBar').hidden=!selecting;el('selectMode').hidden=!selecting;
   el('selectAll').hidden=!selecting;el('deleteSelected').hidden=!selecting;
   el('deleteSelected').disabled=!selected.size;
-  el('empty').hidden=groups.size>0;el('units').textContent=units?units+' units':'';
+  el('empty').hidden=groups.size>0;el('itemCount').textContent=groups.size+(groups.size===1?' item':' items');updateSyncState();
 }
 function removeCodes(codes){
   const totals=balances();
